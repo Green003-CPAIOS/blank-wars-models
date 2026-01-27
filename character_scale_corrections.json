@@ -1,0 +1,76 @@
+{
+  "_description": "Scale corrections based on visual audit of Metal Foldout Chair models",
+  "_reference": "1.0 = standard human-sized character on chair, green wireframe = 1.7m human reference",
+  "_generated": "2026-01-26",
+
+  "corrections": {
+    "crumbsworth": {
+      "scale": 0.5,
+      "reason": "Toaster is correctly small in model, but needs reduction so it doesn't appear same height as humans when chairs are same size"
+    },
+    "rilak_trelkar": {
+      "scale": 0.75,
+      "reason": "Small grey alien, should appear shorter than humans"
+    },
+    "unicorn": {
+      "scale": 0.8,
+      "reason": "Rearing horse extends very tall, reduce to not tower over scene"
+    },
+    "fenrir": {
+      "scale": 1.3,
+      "reason": "Giant mythological wolf, should be imposing - currently crouches low"
+    },
+    "frankenstein": {
+      "scale": 1.1,
+      "reason": "Monster should be notably larger than normal humans"
+    },
+    "velociraptor": {
+      "scale": 0.85,
+      "reason": "Dinosaur crouching on chair, slightly reduce for better proportions"
+    },
+    "quetzalcoatl": {
+      "scale": 1.15,
+      "reason": "Feathered serpent god coiled low, increase presence slightly"
+    },
+    "sun_wukong": {
+      "scale": 0.9,
+      "reason": "Monkey King is compact, slightly smaller than human"
+    },
+    "shaka_zulu": {
+      "scale": 1.1,
+      "reason": "Warrior king appears to sit lower than others, boost slightly"
+    },
+    "archangel_michael": {
+      "scale": 0.9,
+      "reason": "Wings make model very wide, reduce slightly for balance"
+    }
+  },
+
+  "no_change_needed": [
+    "achilles",
+    "agent_x",
+    "betty_boup",
+    "billy_the_kid",
+    "cleopatra",
+    "don_quixote",
+    "genghis_khan",
+    "jack_the_ripper",
+    "joan_of_arc",
+    "kali",
+    "kangaroo",
+    "karna",
+    "little_bo_peep",
+    "mami_wata",
+    "merlin",
+    "napoleon",
+    "nikola_tesla",
+    "popeye",
+    "pt_barnum",
+    "ramses",
+    "robin_hood",
+    "sam_spade",
+    "sherlock",
+    "space_cyborg",
+    "the_mad_hatter"
+  ]
+}
