@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Dinosaur Animation Test</title>
+    <style>
+        body {
+            margin: 0;
+            background: #1a1a2e;
+            color: white;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            padding: 10px;
+            background: #6bff35;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #55cc2e;
+        }
+
+        button.active {
+            background: #ffffff;
+            color: #000;
+        }
+
+        #status {
+            margin-top: 10px;
+            color: #aaa;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <div class="ui">
+        <h1>🦖 Procedural Dino</h1>
+        <button onclick="setAnim('Idle')" class="active" id="btn-Idle">Idle</button>
+        <button onclick="setAnim('Walk')" id="btn-Walk">Walk Cycle</button>
+        <button onclick="setAnim('Roar')" id="btn-Roar">Roar!</button>
+        <div id="status">Loading Rigged Model...</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(3, 2, 4);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0.5, 0);
+
+        // Lights
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+        scene.add(hemiLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // Ground
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshPhongMaterial({ color: 0x111111, depthWrite: false }));
+        mesh.rotation.x = - Math.PI / 2;
+        scene.add(mesh);
+        const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+        scene.add(grid);
+
+        // Model
+        let bones = {};
+        let currentAnim = 'Idle';
+        let time = 0;
+
+        const loader = new GLTFLoader();
+        loader.load('./Rhino_Dino_Rigged_v11.glb', (gltf) => {
+            const model = gltf.scene;
+            scene.add(model);
+
+            // Auto-center
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center);
+            model.position.y += box.getSize(new THREE.Vector3()).y / 2;
+
+            // Find bones
+            model.traverse(o => {
+                if (o.isBone) {
+                    bones[o.name] = o;
+                }
+            });
+            console.log("Bones found:", Object.keys(bones));
+
+            document.getElementById('status').textContent = `Ready! (${Object.keys(bones).length} bones)`;
+
+            // Add Skeleton Helper
+            const helper = new THREE.SkeletonHelper(model);
+            scene.add(helper);
+
+        }, undefined, (e) => {
+            console.error(e);
+            document.getElementById('status').textContent = "Error loading model";
+        });
+
+        // Animation Logic
+        function updateAnim(dt) {
+            time += dt;
+
+            // Reset Rotations (simple lerp back to 0 not implemented, direct set)
+            // Ideally we should blend, but strict procedural set is okay for test
+
+            // IDLE
+            if (currentAnim === 'Idle' || currentAnim === 'Roar') {
+                // Breathing (Spine/Chest)
+                if (bones.Spine) bones.Spine.rotation.x = Math.sin(time * 2) * 0.05;
+                if (bones.Neck) bones.Neck.rotation.x = Math.sin(time * 2 - 1) * 0.05;
+
+                // Tail Sway
+                if (bones.Tail_1) bones.Tail_1.rotation.y = Math.sin(time) * 0.1;
+                if (bones.Tail_2) bones.Tail_2.rotation.y = Math.sin(time - 1) * 0.15;
+                if (bones.Tail_3) bones.Tail_3.rotation.y = Math.sin(time - 2) * 0.2;
+            }
+
+            if (currentAnim === 'Roar') {
+                // Head Up (Reduced slightly)
+                if (bones.Head) bones.Head.rotation.x = -0.5 + Math.sin(time * 10) * 0.08;
+
+                // Jaw Open (Assuming Jaw rotates on X)
+                // Note: Jaw bone exists in my rig definition
+                if (bones.Jaw) {
+                    bones.Jaw.rotation.x = 0.5 + Math.sin(time * 15) * 0.3; // Open HARDER
+                }
+
+                // Shake body
+                if (bones.Root) bones.Root.rotation.z = Math.sin(time * 20) * 0.02;
+            }
+
+            if (currentAnim === 'Walk') {
+                const speed = 5;
+                const legAmp = 0.4; // Reduced from 0.5 to prevent tearing/taffy
+
+                // Legs (Hip Rotation X)
+                if (bones.Hip_L) bones.Hip_L.rotation.x = Math.sin(time * speed) * legAmp;
+                if (bones.Hip_R) bones.Hip_R.rotation.x = Math.sin(time * speed + Math.PI) * legAmp;
+
+                // Knees/Legs (Inverse Kinematics simulated via simple FK)
+                if (bones.Leg_L) bones.Leg_L.rotation.x = Math.abs(Math.sin(time * speed)) * legAmp - 0.2;
+                if (bones.Leg_R) bones.Leg_R.rotation.x = Math.abs(Math.sin(time * speed + Math.PI)) * legAmp - 0.2;
+
+                // Body Bob (Reduced)
+                if (bones.Root) bones.Root.position.y = 0.45 + Math.abs(Math.sin(time * speed)) * 0.015;
+
+                // Tail Balance
+                if (bones.Tail_1) bones.Tail_1.rotation.y = Math.cos(time * speed) * 0.2;
+            } else {
+                // Reset Root position
+                if (bones.Root) bones.Root.position.y = 0.45;
+            }
+        }
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            updateAnim(clock.getDelta());
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.setAnim = (mode) => {
+            currentAnim = mode;
+            document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + mode).classList.add('active');
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

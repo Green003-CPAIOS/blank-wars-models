@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inferno Soar - Rigged Animation Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 100, 50, 0.4);
+            border-radius: 12px;
+            padding: 20px;
+            color: #fff;
+            max-width: 320px;
+        }
+
+        .info-panel h1 {
+            font-size: 1.4rem;
+            color: #ff6b35;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-panel h1::before {
+            content: '🐉';
+            font-size: 1.5rem;
+        }
+
+        .animation-list {
+            margin-top: 15px;
+        }
+
+        .animation-btn {
+            display: block;
+            width: 100%;
+            padding: 12px 15px;
+            margin: 8px 0;
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.2), rgba(255, 60, 0, 0.1));
+            border: 1px solid rgba(255, 107, 53, 0.4);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+
+        .animation-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.4), rgba(255, 60, 0, 0.2));
+            border-color: #ff6b35;
+            transform: translateX(5px);
+        }
+
+        .animation-btn.active {
+            background: linear-gradient(135deg, #ff6b35, #ff4500);
+            border-color: #ff6b35;
+            box-shadow: 0 0 15px rgba(255, 107, 53, 0.4);
+        }
+
+        .animation-btn .speed {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-left: 5px;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+
+        .status-label {
+            color: #888;
+        }
+
+        .status-value {
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff6b35;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 107, 53, 0.3);
+            border-top-color: #ff6b35;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 25px;
+            border-radius: 20px;
+            color: #aaa;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container">
+        <div id="loading">
+            <div class="loader"></div>
+            Loading Rigged Dragon...
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <h1>Inferno Soar</h1>
+        <p style="opacity: 0.7; font-size: 0.9rem;">Rigged Animation Test</p>
+
+        <div class="animation-list">
+            <button class="animation-btn" data-anim="WingFlap_Fast">
+                🦅 Wing Flap - Fast <span class="speed">(0.5s cycle)</span>
+            </button>
+            <button class="animation-btn" data-anim="WingFlap_Normal">
+                🦅 Wing Flap - Normal <span class="speed">(1s cycle)</span>
+            </button>
+            <button class="animation-btn" data-anim="WingFlap_Slow">
+                🦅 Wing Flap - Slow <span class="speed">(2s gliding)</span>
+            </button>
+            <button class="animation-btn" data-anim="FireBreath">
+                🔥 Fire Breath <span class="speed">(2s attack)</span>
+            </button>
+            <button class="animation-btn" data-anim="TailSway">
+                🐍 Tail Sway <span class="speed">(3s movement)</span>
+            </button>
+        </div>
+
+        <div class="status">
+            <div><span class="status-label">Playing:</span> <span class="status-value" id="current-anim">None</span>
+            </div>
+            <div><span class="status-label">Bones:</span> <span class="status-value" id="bone-count">-</span></div>
+        </div>
+    </div>
+
+    <div class="controls-hint">
+        Drag to rotate • Scroll to zoom • Click animation to play
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        // Scene setup
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+        camera.position.set(2, 1, 3);
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.3;
+        container.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 0.5;
+        controls.maxDistance = 20;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 2);
+        keyLight.position.set(5, 10, 5);
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0xff6b35, 1);
+        fillLight.position.set(-5, 5, -5);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xff4500, 0.8);
+        rimLight.position.set(0, -5, -10);
+        scene.add(rimLight);
+
+        // Ground
+        const groundGeo = new THREE.PlaneGeometry(20, 20);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x111122,
+            roughness: 0.9
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.5;
+        scene.add(ground);
+
+        // =====================
+        // FIRE TORRENT SYSTEM - Dramatic flames!
+        // =====================
+        const PARTICLE_COUNT = 2000;  // More particles for dense flames
+        const fireParticles = {
+            active: false,
+            geometry: null,
+            material: null,
+            points: null,
+            velocities: [],
+            lifetimes: [],
+            initialLifetimes: [],
+            maxLifetime: 1.2,
+            spawnPosition: new THREE.Vector3(0, 0.6, 0.6), // Head position (approx at +Z)
+            fireLight: null,
+            flickerTime: 0
+        };
+
+        function createFireParticles() {
+            const positions = new Float32Array(PARTICLE_COUNT * 3);
+            const colors = new Float32Array(PARTICLE_COUNT * 3);
+            const sizes = new Float32Array(PARTICLE_COUNT);
+            const alphas = new Float32Array(PARTICLE_COUNT);
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                positions[i * 3] = 0;
+                positions[i * 3 + 1] = -1000;
+                positions[i * 3 + 2] = 0;
+
+                colors[i * 3] = 1.0;
+                colors[i * 3 + 1] = 0.8;
+                colors[i * 3 + 2] = 0.3;
+
+                // Much larger particles for dramatic effect
+                sizes[i] = Math.random() * 0.25 + 0.1;
+                alphas[i] = 1.0;
+
+                fireParticles.velocities.push(new THREE.Vector3());
+                fireParticles.lifetimes.push(-1);
+                fireParticles.initialLifetimes.push(1.0);
+            }
+
+            fireParticles.geometry = new THREE.BufferGeometry();
+            fireParticles.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            fireParticles.geometry.setAttribute('customColor', new THREE.BufferAttribute(colors, 3));
+            fireParticles.geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            fireParticles.geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+
+            // STYLIZED REALISTIC SHADER - Hot Plasma Style (Visible + Pretty)
+            fireParticles.material = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 }
+                },
+                vertexShader: `
+                    attribute float size;
+                    attribute vec3 customColor;
+                    attribute float alpha;
+                    varying vec3 vColor;
+                    varying float vAlpha;
+                    
+                    void main() {
+                        vColor = customColor;
+                        vAlpha = alpha;
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size * (600.0 / -mvPosition.z); // Large visible particles
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying vec3 vColor;
+                    varying float vAlpha;
+                    
+                    void main() {
+                        // Circular particle
+                        vec2 center = gl_PointCoord - vec2(0.5);
+                        float dist = length(center);
+                        
+                        if (dist > 0.5) discard;
+                        
+                        // Procedural Fire Gradient: White Core -> Yellow -> Red -> Transparent
+                        float intensity = 1.0 - (dist * 2.0); // 1.0 at center, 0.0 at edge
+                        intensity = pow(intensity, 0.8); // Softer falloff for blending
+                        
+                        vec3 coreColor = vec3(1.0, 1.0, 0.8); // Hot white/yellow
+                        vec3 midColor = vec3(1.0, 0.6, 0.1);  // Orange
+                        vec3 edgeColor = vec3(0.8, 0.0, 0.0); // Red
+                        
+                        vec3 finalColor;
+                        float finalAlpha = vAlpha;
+                        
+                        if (dist < 0.15) {
+                            finalColor = mix(coreColor, midColor, dist / 0.15);
+                            finalAlpha *= 1.0; // Solid core
+                        } else {
+                            finalColor = mix(midColor, edgeColor, (dist - 0.15) / 0.35);
+                            finalAlpha *= intensity; // Soft fade
+                        }
+                        
+                        gl_FragColor = vec4(finalColor, finalAlpha);
+                    }
+                `,
+                transparent: true,
+                blending: THREE.NormalBlending, // Normal Blending keeps it SOLID/VISIBLE unlike Additive
+                depthWrite: false
+            });
+
+            fireParticles.points = new THREE.Points(fireParticles.geometry, fireParticles.material);
+            fireParticles.points.frustumCulled = false; // CRITICAL FIX: Prevent culling when particles move away
+            scene.add(fireParticles.points);
+
+            // Expose for debugging
+            window.debugApp = { scene, camera, fireParticles, renderer };
+        }
+
+        function spawnFireParticle(index) {
+            const positions = fireParticles.geometry.attributes.position.array;
+            const colors = fireParticles.geometry.attributes.customColor.array;
+            const alphas = fireParticles.geometry.attributes.alpha.array;
+            const sizes = fireParticles.geometry.attributes.size.array;
+
+            // Get spawn position from bone (Tail_1 = neck area, offset forward to mouth)
+            const spawnPos = new THREE.Vector3();
+
+            if (fireParticles.fireBone) {
+                fireParticles.fireBone.getWorldPosition(spawnPos);
+                // Offset +0.38 in Z to reach the mouth (from neck/Tail_1)
+                spawnPos.z += 0.38;
+            } else {
+                spawnPos.copy(fireParticles.spawnPosition);
+            }
+
+            const spreadX = (Math.random() - 0.5) * 0.1;
+            const spreadY = (Math.random() - 0.5) * 0.1;
+
+            positions[index * 3] = spawnPos.x + spreadX;
+            positions[index * 3 + 1] = spawnPos.y + spreadY;
+            positions[index * 3 + 2] = spawnPos.z;
+
+            // CONTINUOUS VARIATION (Melting Stream)
+            const sizeRandom = Math.random();
+
+            // Velocity correlated with size (Larger = slightly slower)
+            const baseSpeed = 4.0 - sizeRandom * 1.5 + Math.random();
+
+            // WORLD-SPACE +Z velocity (Forward) - This is what was working!
+            fireParticles.velocities[index].set(
+                spreadX * 4 + (Math.random() - 0.5) * 0.2,
+                spreadY * 4 + (Math.random() - 0.5) * 0.2,
+                baseSpeed  // +Z is Forward in world space
+            );
+
+            // Lifetime
+            const lifetime = fireParticles.maxLifetime * (0.6 + Math.random() * 0.5);
+            fireParticles.lifetimes[index] = lifetime;
+            fireParticles.initialLifetimes[index] = lifetime;
+
+            // Size
+            sizes[index] = 0.15 + sizeRandom * 0.3;
+
+            // Color: Continuous mix
+            if (Math.random() > 0.7) {
+                colors[index * 3] = 1.0; colors[index * 3 + 1] = 1.0; colors[index * 3 + 2] = 0.8; // White sparks
+            } else {
+                colors[index * 3] = 1.0; colors[index * 3 + 1] = 0.3 + Math.random() * 0.4; colors[index * 3 + 2] = 0.0; // Orange body
+            }
+            alphas[index] = 1.0;
+        }
+
+        function updateFireParticles(delta) {
+            if (!fireParticles.geometry) return;
+
+            // Note: Spawn position is handled inside spawnFireParticle now using current bone pos
+
+            const positions = fireParticles.geometry.attributes.position.array;
+            const colors = fireParticles.geometry.attributes.customColor.array;
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                if (fireParticles.lifetimes[i] > 0) {
+                    fireParticles.lifetimes[i] -= delta;
+
+                    if (fireParticles.lifetimes[i] <= 0) {
+                        positions[i * 3 + 1] = -1000;
+                        continue;
+                    }
+
+                    // Update position - FAST movement
+                    const vel = fireParticles.velocities[i];
+                    positions[i * 3] += vel.x * delta;
+                    positions[i * 3 + 1] += vel.y * delta;
+                    positions[i * 3 + 2] += vel.z * delta;
+
+                    // Turbulence for flame flicker
+                    vel.x += (Math.random() - 0.5) * delta * 3;
+                    vel.z += (Math.random() - 0.5) * delta * 3;
+
+                    // Slow down slightly
+                    vel.x *= 0.995;
+                    vel.y *= 0.99;
+                    vel.z *= 0.995;
+
+                    // Color transition: white-yellow -> orange -> red -> dark red
+                    const lifeRatio = fireParticles.lifetimes[i] / fireParticles.initialLifetimes[i];
+
+                    if (lifeRatio > 0.7) {
+                        // White-yellow hot core
+                        colors[i * 3] = 1.0;
+                        colors[i * 3 + 1] = 0.9 + lifeRatio * 0.1;
+                        colors[i * 3 + 2] = 0.5 + (lifeRatio - 0.7) * 1.5;
+                    } else if (lifeRatio > 0.3) {
+                        // Orange
+                        colors[i * 3] = 1.0;
+                        colors[i * 3 + 1] = lifeRatio * 1.5;
+                        colors[i * 3 + 2] = 0.1;
+                    } else {
+                        // Red to dark
+                        colors[i * 3] = 0.3 + lifeRatio * 2.3;
+                        colors[i * 3 + 1] = lifeRatio * 0.5;
+                        colors[i * 3 + 2] = 0.0;
+                    }
+                }
+            }
+
+            // HIGH spawn rate for dense flames
+            if (fireParticles.active) {
+                for (let i = 0; i < 80; i++) {  // 80 particles per frame -> Dense Stream
+                    const inactiveIndex = fireParticles.lifetimes.findIndex(l => l <= 0);
+                    if (inactiveIndex >= 0) {
+                        spawnFireParticle(inactiveIndex);
+                    }
+                }
+            }
+
+            // Flicker the fire light and UPDATE POSITION
+            if (fireParticles.fireLight && fireParticles.fireBone) {
+                fireParticles.flickerTime += delta * 20;
+                const flicker = 0.7 + Math.sin(fireParticles.flickerTime) * 0.15 +
+                    Math.sin(fireParticles.flickerTime * 2.3) * 0.1 +
+                    Math.random() * 0.1;
+                fireParticles.fireLight.intensity = 8 * flicker;
+
+                // Update light position to follow bone
+                const worldPos = new THREE.Vector3();
+                fireParticles.fireBone.getWorldPosition(worldPos);
+                // Offset slightly forward (+Y local)
+                const quat = new THREE.Quaternion();
+                fireParticles.fireBone.getWorldQuaternion(quat);
+                const offset = new THREE.Vector3(0, 0.5, 0).applyQuaternion(quat); // Light is further out than spawn
+                fireParticles.fireLight.position.copy(worldPos).add(offset);
+            } else if (fireParticles.fireLight) {
+                // Fallback for no bone
+                fireParticles.flickerTime += delta * 20;
+                const flicker = 0.7 + Math.sin(fireParticles.flickerTime) * 0.15 +
+                    Math.sin(fireParticles.flickerTime * 2.3) * 0.1 +
+                    Math.random() * 0.1;
+                fireParticles.fireLight.intensity = 8 * flicker;
+            }
+
+            fireParticles.geometry.attributes.position.needsUpdate = true;
+            fireParticles.geometry.attributes.customColor.needsUpdate = true;
+            fireParticles.geometry.attributes.size.needsUpdate = true; // IMPORTANT!
+        }
+
+        function startFire(duration = 2.0) {
+            fireParticles.active = true;
+            fireParticles.flickerTime = 0;
+
+            // INTENSE point light for dramatic fire glow
+            fireParticles.fireLight = new THREE.PointLight(0xff6600, 8, 4);
+            fireParticles.fireLight.position.copy(fireParticles.spawnPosition);
+            fireParticles.fireLight.position.z += 0.5;  // Move forward (+Z) with flames
+            scene.add(fireParticles.fireLight);
+
+            // Secondary orange glow
+            const glowLight = new THREE.PointLight(0xff2200, 4, 3);
+            glowLight.position.copy(fireParticles.spawnPosition);
+            scene.add(glowLight);
+
+            setTimeout(() => {
+                fireParticles.active = false;
+                if (fireParticles.fireLight) {
+                    scene.remove(fireParticles.fireLight);
+                    fireParticles.fireLight = null;
+                }
+                scene.remove(glowLight);
+            }, duration * 1000);
+        }
+
+        // Initialize fire particles
+        createFireParticles();
+
+        // Animation
+        let mixer = null;
+        let animations = {};
+        let currentAction = null;
+        const clock = new THREE.Clock();
+        let dragonModel = null;
+
+        // Load dragon model
+        const loader = new GLTFLoader();
+
+        loader.load(
+            './Inferno_Soar_Rigged.glb',
+            (gltf) => {
+                document.getElementById('loading').style.display = 'none';
+
+                dragonModel = gltf.scene;
+                scene.add(dragonModel);
+
+                // Center model
+                const box = new THREE.Box3().setFromObject(dragonModel);
+                const center = box.getCenter(new THREE.Vector3());
+                dragonModel.position.sub(center);
+                dragonModel.position.y += 0.5;
+
+                // Find the 'Tail_1' bone (base of tail chain = neck area, we offset to mouth)
+                // Using Tail_1 with +0.38 Z offset reaches the mouth correctly
+                let fireBone = null;
+                dragonModel.traverse((child) => {
+                    if (child.isBone && child.name === 'Tail_1') {
+                        fireBone = child;
+                        console.log("Found Fire Bone (Neck/Tail_1): " + child.name);
+                    }
+                });
+
+                // Fallback to Tail
+                if (!fireBone) {
+                    dragonModel.traverse((child) => {
+                        if (child.isBone && child.name.includes('Tail')) {
+                            fireBone = child;
+                        }
+                    });
+                }
+
+                fireParticles.fireBone = fireBone;
+
+                // Setup animation mixer
+                mixer = new THREE.AnimationMixer(dragonModel);
+
+                // Store animations
+                gltf.animations.forEach((clip) => {
+                    animations[clip.name] = clip;
+                    console.log(`Found animation: ${clip.name} (${clip.duration.toFixed(2)}s)`);
+                });
+
+                // Count bones
+                let boneCount = 0;
+                dragonModel.traverse((child) => {
+                    if (child.isBone) boneCount++;
+                });
+                document.getElementById('bone-count').textContent = boneCount;
+
+                // Update camera
+                controls.target.set(0, 0.3, 0);
+                controls.update();
+
+                // Auto-play first animation
+                if (gltf.animations.length > 0) {
+                    playAnimation('WingFlap_Normal');
+                }
+
+                console.log('Dragon loaded!', {
+                    animations: Object.keys(animations),
+                    bones: boneCount
+                });
+            },
+            (progress) => {
+                const pct = (progress.loaded / progress.total * 100).toFixed(0);
+                document.getElementById('loading').innerHTML =
+                    `<div class="loader"></div>Loading Rigged Dragon... ${pct}%`;
+            },
+            (error) => {
+                console.error('Error loading model:', error);
+                document.getElementById('loading').innerHTML =
+                    `<div style="color: #ff4444;">Error loading model: ${error.message}</div>`;
+            }
+        );
+
+        function playAnimation(name) {
+            if (!mixer || !animations[name]) {
+                console.warn(`Animation not found: ${name}`);
+                return;
+            }
+
+            // Stop current
+            if (currentAction) {
+                currentAction.fadeOut(0.3);
+            }
+
+            // Play new
+            const clip = animations[name];
+            currentAction = mixer.clipAction(clip);
+            currentAction.reset();
+            currentAction.fadeIn(0.3);
+            currentAction.play();
+
+            // FIRE BREATH EFFECT!
+            if (name === 'FireBreath') {
+                // Delay fire to sync with head lunge (around frame 35 of 90)
+                setTimeout(() => {
+                    startFire(1.5);
+                }, 800);
+            }
+
+            // Update UI
+            document.getElementById('current-anim').textContent = name;
+
+            // Update button states
+            document.querySelectorAll('.animation-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.anim === name);
+            });
+
+            console.log(`Playing: ${name}`);
+        }
+
+        // Button click handlers
+        document.querySelectorAll('.animation-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                playAnimation(btn.dataset.anim);
+            });
+        });
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            if (mixer) mixer.update(delta);
+
+            // Update fire particles
+            updateFireParticles(delta);
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>
