@@ -40,18 +40,17 @@ print(f"[JAW] Bounds Z: {min_z:.4f} to {max_z:.4f} (height: {height:.4f})")
 # PARAMETERS - Argock (orc trainer, seated in foldout chair)
 # Model is centered at origin, Z range -1.0 to 1.0
 # Mouth area at ~73% height based on geometry analysis
-MOUTH_X = 0.02       # Slightly right of center (matches head center_x)
-JAW_Z_CENTER = 0.46  # ~73% of height from bottom (-1.0 + 2.0 * 0.73)
-MOUTH_Y = -0.07      # Front surface of face at mouth level
+MOUTH_X = 0.02       # Centered
+JAW_Z_CENTER = 0.62  # Mouth seam
+MOUTH_Y = -0.17      # Front face surface
 
-# Bone Z positions
-JAW_Z = JAW_Z_CENTER - 0.02
-UPPER_LIP_Z = JAW_Z_CENTER + 0.025
+# Both bones at the seam
+JAW_Z = 0.61         # Just below seam
+UPPER_LIP_Z = 0.63   # Just above seam
 HEAD_TOP_Z = max_z - 0.15
 
-# Radii scaled for 2-unit tall model
-JAW_RADIUS = 0.12
-UPPER_LIP_RADIUS = 0.12
+JAW_RADIUS = 0.06
+UPPER_LIP_RADIUS = 0.06
 FALLOFF_EXPONENT = 2.0
 
 print(f"[JAW] Config: X={MOUTH_X:.3f}, Y={MOUTH_Y:.3f}")
@@ -111,20 +110,34 @@ head_vg = mesh_obj.vertex_groups["Head"]
 jaw_vg = mesh_obj.vertex_groups["Jaw"]
 upper_lip_vg = mesh_obj.vertex_groups["UpperLip"]
 
-# 5. Assign Weights (Ellipsoid 3D distance)
+# 5. Assign Weights — every vertex gets a deliberate bone assignment
 print("[JAW] Assigning weights...")
 jaw_indices = []
 upper_lip_indices = []
+head_indices = []
+root_indices = []
 
-# Scaling factors for ellipsoid
-X_SCALE = 0.5   # Narrow horizontal
-Z_SCALE = 2.2   # Tight vertical
+# Scaling factors for ellipsoid distance around mouth
+X_SCALE = 0.5   # Moderate horizontal
+Z_SCALE = 1.5   # Tight vertical
+
+# Region boundaries (model Z range: -1.0 to 1.0, height 2.0)
+NECK_Z = 0.58                 # Below mouth
+FACE_Y_MAX_LIP = -0.10        # Upper lip: face surface at Z=0.8+ is at Y ~ -0.17
+FACE_Y_MAX_JAW = -0.08        # Jaw: lower face surface
+FACE_X_MAX = 0.18             # Only vertices within mouth width of center X
 
 for i, coord in enumerate(verts):
+    # Body region: everything below the neck line
+    if coord[2] < NECK_Z:
+        root_vg.add([i], 1.0, 'REPLACE')
+        root_indices.append(i)
+        continue
+
+    # Head region: compute mouth proximity
     dx = coord[0] - MOUTH_X
     dy = coord[1] - MOUTH_Y
 
-    # Jaw Distance
     dz_jaw = coord[2] - JAW_Z
     jaw_dist = math.sqrt(
         (dx * X_SCALE)**2 +
@@ -132,7 +145,6 @@ for i, coord in enumerate(verts):
         (dz_jaw * Z_SCALE)**2
     )
 
-    # Upper Lip Distance
     dz_upper = coord[2] - UPPER_LIP_Z
     upper_dist = math.sqrt(
         (dx * X_SCALE)**2 +
@@ -140,30 +152,35 @@ for i, coord in enumerate(verts):
         (dz_upper * Z_SCALE)**2
     )
 
-    # HARD SPLIT LOGIC
+    # Hard split at mouth center line — only front face gets mouth weight
     weight_jaw = 0.0
     weight_upper = 0.0
 
-    if coord[2] > JAW_Z_CENTER:
-        # Above center -> Upper Lip ONLY
-        if upper_dist < UPPER_LIP_RADIUS:
-            weight_upper = (1 - (upper_dist / UPPER_LIP_RADIUS)) ** FALLOFF_EXPONENT
-    else:
-        # Below center -> Lower Jaw ONLY
-        if jaw_dist < JAW_RADIUS:
-            weight_jaw = (1 - (jaw_dist / JAW_RADIUS)) ** FALLOFF_EXPONENT
+    if abs(coord[0] - MOUTH_X) < FACE_X_MAX:
+        if coord[2] > JAW_Z_CENTER and coord[1] < FACE_Y_MAX_LIP:
+            if upper_dist < UPPER_LIP_RADIUS:
+                weight_upper = (1 - (upper_dist / UPPER_LIP_RADIUS)) ** FALLOFF_EXPONENT
+        elif coord[2] <= JAW_Z_CENTER and coord[1] < FACE_Y_MAX_JAW:
+            if jaw_dist < JAW_RADIUS:
+                weight_jaw = (1 - (jaw_dist / JAW_RADIUS)) ** FALLOFF_EXPONENT
 
     if weight_jaw > 0:
         jaw_vg.add([i], weight_jaw, 'REPLACE')
-        jaw_indices.append(i)
         head_vg.add([i], 1.0 - weight_jaw, 'REPLACE')
+        jaw_indices.append(i)
     elif weight_upper > 0:
         upper_lip_vg.add([i], weight_upper, 'REPLACE')
-        upper_lip_indices.append(i)
         head_vg.add([i], 1.0 - weight_upper, 'REPLACE')
+        upper_lip_indices.append(i)
+    else:
+        head_vg.add([i], 1.0, 'REPLACE')
+        head_indices.append(i)
 
-print(f"[JAW] Lower Jaw vertices: {len(jaw_indices)}")
-print(f"[JAW] Upper Lip vertices: {len(upper_lip_indices)}")
+print(f"[JAW] Root vertices (body): {len(root_indices):,}")
+print(f"[JAW] Head vertices: {len(head_indices):,}")
+print(f"[JAW] Lower Jaw vertices: {len(jaw_indices):,}")
+print(f"[JAW] Upper Lip vertices: {len(upper_lip_indices):,}")
+print(f"[JAW] Total assigned: {len(root_indices) + len(head_indices) + len(jaw_indices) + len(upper_lip_indices):,} / {len(verts):,}")
 
 # 6. Animation - Talk
 print("[JAW] Creating animation...")
@@ -185,12 +202,11 @@ amount = [0, 1.0, 0.2, 0.8, 0, 0.5, 0.9, 0.3, 0.7, 0, 0]
 for i, val in enumerate(amount):
     frame = frames[i]
     bpy.context.scene.frame_set(frame)
-    # Upper lip moves UP (Negative Z)
-    upper_lip_pose.location = (0, 0, -val * 0.03)
-    upper_lip_pose.keyframe_insert(data_path="location", frame=frame)
-    # Jaw moves DOWN (Positive Z)
-    jaw_pose.location = (0, 0, val * 0.05)
+    # Matches barry pattern exactly: +Z jaw down, -Z lip up
+    jaw_pose.location = (0, 0, val * 0.04)
     jaw_pose.keyframe_insert(data_path="location", frame=frame)
+    upper_lip_pose.location = (0, 0, -val * 0.025)
+    upper_lip_pose.keyframe_insert(data_path="location", frame=frame)
 
 talk_track = armature.animation_data.nla_tracks.new()
 talk_strip = talk_track.strips.new("Talk", 0, talk_action)
